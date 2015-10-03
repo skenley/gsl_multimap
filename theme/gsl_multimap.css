@@ -1,0 +1,195 @@
+.google-store-locator-map {
+  height: 500px;
+}
+
+.google-store-locator-panel {
+  float: left;
+  height: 500px;
+  margin-right: 10px;
+  width: 300px;
+}
+
+/* Ensure image widths for responsive designs */
+.google-store-locator-map img {
+  max-width: none !important;
+}
+
+.storelocator-panel .feature-filter {
+  overflow: visible;
+}
+
+.storelocator-panel .store-list {
+  clear: both;
+}
+
+
+.locator-tab {
+  display: inline-block;
+  padding: 5px;
+  background: red;
+  color: #ffffff;
+  border-top:1px solid #cccccc;
+  border-left:1px solid #cccccc;
+  border-right:1px solid #cccccc;
+  transition: 1s;
+  cursor:pointer;
+}
+.store-locator-content {
+  position: relative;
+  height:500px;
+  width:100%;
+}
+.tab-x {
+  background:#ffffff !important;
+  color:#000000 !important;
+  transition: 1s;
+}
+.tab-content {
+  position:absolute;
+  z-index:200;
+  opacity:0;
+  width:100%;
+  transition: .5s;
+}
+.tab-content.tab-active {
+  z-index:500;
+  opacity:1;
+  transition: .5s;
+}
+
+/* ========================= */
+/* = Locations Page Styles = */
+/* ========================= */
+
+.locator-tab {
+    background:#C7D7E4;
+    border-left:1px solid #C7D7E4;
+	border-top:1px solid #C7D7E4;
+	border-right:1px solid #C7D7E4;
+	-webkit-border-radius:10px 10px 0px 0px;
+	-moz-border-radius:10px 10px 0px 0px;
+	border-radius:10px 10px 0px 0px;
+    color: #3B3435;
+    cursor: pointer;
+    display: inline-block;
+    padding: 10px 20px;
+	text-transform:uppercase;
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.locator-tab:hover {
+	background:#C7D7E4 !important;
+    color: #3B3435 !important;
+    border-left:1px solid #3B3435;
+	border-top:1px solid #3B3435;
+	border-right:1px solid #3B3435;
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.locator-tab.tab-x {
+    background:#3B3435 !important;
+    color: #ffffff !important;
+    border-left:1px solid #3B3435;
+	border-top:1px solid #3B3435;
+	border-right:1px solid #3B3435;
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.locator-tab.tab-x:hover {
+    background:#3B3435 !important;
+    color: #ffffff !important;
+    border-left:1px solid #3B3435;
+	border-top:1px solid #3B3435;
+	border-right:1px solid #3B3435;
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.store-locator-content {
+	border-top:8px solid #3B3435;
+}
+
+.location-search h4 {
+	text-transform:uppercase;
+	margin-bottom:4px;
+}
+
+.tab1-content .storelocator-panel .store-list li.highlighted, 
+.tab1-content .storelocator-panel .store-list li.highlighted:hover {
+    background:#c7d7e4 !important;
+	color:#3b3435 !important;
+}
+
+.tab1-content .storelocator-panel .store-list li.store {
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.tab1-content .storelocator-panel .store-list li.store:hover {
+    background:#c7d7e4 !important;
+	color:#3b3435 !important;
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.tab1-content .storelocator-panel .store-list li.store:hover a {
+	color:#3b3435 !important;
+}
+
+.tab2-content .storelocator-panel .store-list li.highlighted, 
+.tab2-content .storelocator-panel .store-list li.highlighted:hover {
+	background: #c7d7e4 !important;
+	color:#3b3435 !important;
+}
+
+.tab2-content .storelocator-panel .store-list li.store {
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.tab2-content .storelocator-panel .store-list li.store:hover {
+	background:#c7d7e4 !important;
+	color:#3b3435 !important;
+	-webkit-transition: all 0.2s ease-in-out; 
+	-moz-transition: all 0.2s ease-in-out; 
+	-o-transition: all 0.2s ease-in-out; 
+	transition: all 0.2s ease-in-out;
+}
+
+.tab2-content .storelocator-panel .store-list li.store:hover a {
+	color:#3b3435 !important;
+}
+
+.tab2-content .storelocator-panel .store-list li .title a {
+	color:#3157FF;
+}
+
+.tab-content.tab-active {
+    z-index: 499 !important;
+}
+
+.phone-box.phone {
+	display: block !important;
+}
+
+.store .phone {
+	display: none;
+}
+
