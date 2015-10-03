@@ -1,0 +1,611 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Provide multiple maps functionality for Google Store Locator.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function gsl_multimap_views_api() {
+	
+  return array("version" => "3.0");
+}
+
+/**
+ * Implements hook_menu().
+ *
+ * Create configuration page for GSL Multimap.
+ *
+ */
+
+function gsl_multimap_menu() {
+	
+	$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+	$taxTree = taxonomy_get_tree($vocab->vid);
+	foreach ($taxTree as $term) {
+		$name = $term->name;
+		$nameLower = str_replace(' ', '_', strtolower($term->name));
+		$items[variable_get('gsl_display_path_' . $name, 'locator/' . $nameLower)] = array(
+			'title' => variable_get('gsl_title', 'Store Locator'),
+			'description' => t($name . ' locator map using Google Store Location Library'),
+			'page callback' => 'gsl_multimap_default_page',
+			'page arguments' => $nameLower,
+			'access arguments' => array('access content'),
+		);
+	}
+	$items['locator'] = array(
+		'title' => 'Locations',
+		'description' => 'Store Locator Description',
+		'page callback' => 'gsl_multimap_page',
+		'access arguments' => array('access content'),
+	);
+	$items['admin/config/search/gsl-multimap'] = array(
+		'title' => 'Google Store Locator Multimap',
+		'description' => 'Google Store Locator Multimap Settings',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('gsl_multimap_admin_form'),
+		'access arguments' => array('administer site configuration'),
+		'type' => MENU_NORMAL_ITEM,
+		'menu_name' => 'management',
+		'weight' => 2,
+	);
+	return $items;
+}
+
+/**
+ * Create admin form for GSL Multimap.
+ */
+
+function gsl_multimap_admin_form($form, &$form_state) {
+	
+	$form['description'] = array(
+		'#type' => 'item',
+		'#title' => t('Google Store Locator Multimap Administrator Settings'),
+	);
+	$form['gsl_multimap']['gsl_type'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Location Types'),
+		'#description' => t('Enter the types of locations you have. One per line.'),
+		'#default_value' => variable_get('gsl_type'),
+		'#size' => 40,
+	);
+	
+	$form['gsl_multimap']['submit'] = array(
+		'#type' => 'submit',
+		'#value' => 'Save Configuration',
+	);
+	
+	return $form;
+}
+
+/**
+ * Submit callback for gsl_multimap_admin_form.
+ */
+
+function gsl_multimap_admin_form_submit($form, &$form_state) {
+	
+	variable_set('gsl_type', $form_state['values']['gsl_type']);
+	$value = variable_get('gsl_type');
+	$terms = explode("\n", $value);
+	gsl_multimap_insert_terms($terms);
+	gsl_multimap_remove_terms($terms);
+	drupal_flush_all_caches();
+	drupal_set_message(t('Configuration settings have been saved.'));
+}
+
+/**
+ * Insert new location types into GSL Location Types vocabulary.
+ */
+
+function gsl_multimap_insert_terms($terms) {
+	
+	if (!empty($terms)) {
+		$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+		foreach ($terms as $name) {
+			$nameExists = taxonomy_get_term_by_name($name);
+			if (!empty($name) && empty($nameExists)) { // Check if term already exists before inserting.
+  		  $term = new stdClass();
+	  		$term->name = $name;
+		  	$term->vid = $vocab->vid;
+			  taxonomy_term_save($term);
+			}
+		}
+	}
+}
+
+/**
+ * Remove location types when user removes them from the types list.
+ */
+
+function gsl_multimap_remove_terms($terms) {
+	
+	$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+	$taxTree = taxonomy_get_tree($vocab->vid);
+	
+	foreach ($taxTree as $term) {
+		$termName = preg_replace('/[^A-Za-z0-9\-]/', '', $term->name);
+		foreach ($terms as $name) {
+			$name = preg_replace('/[^A-Za-z0-9\-]/', '', $name);
+			if ($termName == $name) {
+				$status = TRUE;
+				break;
+			} else {
+				$status = FALSE;
+			}
+		}
+		if (!$status) {
+			taxonomy_term_delete($term->tid);
+		}
+	}
+}
+
+/**
+* Implements hook_views_default_views_alter().
+* 
+* Add page displays to the "Location Export" view for each store type.
+* 
+*/
+
+function gsl_multimap_views_default_views_alter(&$views) {
+	
+	$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+	$taxTree = taxonomy_get_tree($vocab->vid);
+	if (array_key_exists('google_store_locator_json_export', $views)) {
+	  foreach ($taxTree as $term) {
+	  	$storeType = $term->name;
+			$storeTypePath = str_replace(' ', '_', strtolower($term->name));
+	    
+	    /* New Display: Page */
+	    $view = $views['google_store_locator_json_export'];
+	    $handler = $view->new_display('page', $storeType . ':Page', $storeTypePath . '_pg');
+	    $handler->display->display_options['defaults']['hide_adin_links'] = FALSE;
+	    $handler->display->display_options['defaults']['filter_groups'] = FALSE;
+	    $handler->display->display_options['defaults']['filters'] = FALSE;
+	    /* Filter criterion: Content: Type */
+	    $handler->display->display_options['filters']['type']['id'] = 'type';
+	    $handler->display->display_options['filters']['type']['table'] = 'node';
+	    $handler->display->display_options['filters']['type']['field'] = 'type';
+	    $handler->display->display_options['filters']['type']['value'] = array(
+	      'store_location' => 'store_location',
+	    );
+	    /* Filter criterion: Content: Published */
+	    $handler->display->display_options['filters']['status']['id'] = 'status';
+	    $handler->display->display_options['filters']['status']['table'] = 'node';
+	    $handler->display->display_options['filters']['status']['field'] = 'status';
+	    $handler->display->display_options['filters']['status']['value'] = '1';
+	    /* Filter criterion: Content: Has taxonomy term */
+	    $handler->display->display_options['filters']['tid']['id'] = 'tid';
+	    $handler->display->display_options['filters']['tid']['table'] = 'taxonomy_index';
+	    $handler->display->display_options['filters']['tid']['field'] = 'tid';
+	    $handler->display->display_options['filters']['tid']['value'] = array(
+	      (int) $term->tid => $term->tid,
+	    );
+	    $handler->display->display_options['filters']['tid']['type'] = 'select';
+	    $handler->display->display_options['filters']['tid']['vocabulary'] = 'gsl_location_types';
+	    $handler->display->display_options['path'] = 'locator/' . $storeTypePath . '/json';
+      
+	  }
+	}
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Alter Google Store Locator admin form to accomodate multiple location types.
+ *
+ */
+
+function gsl_multimap_form_alter(&$form, $form_state, $form_id) {
+
+	if ($form_id == 'google_store_locator_admin_form') {
+		$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+		$taxTree = taxonomy_get_tree($vocab->vid);
+		$form['description'] = array(
+	    '#type' => 'item',
+	    '#title' => t('Google Store Locator Administrator Settings'),
+			'#weight' => -50,
+	  );
+	  $form['google_store_locator']['gsl_title'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('What should the title be?'),
+	    '#description' => t('The title for your locator'),
+	    '#default_value' => variable_get('gsl_title', 'Store Locator'),
+	    '#size' => 30,
+	    '#required' => TRUE,
+			'#weight' => -49,
+	  );
+	  $form['google_store_locator']['gsl_search_label'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('What should the search label say?'),
+	    '#description' => t('The label shown above the search input box.'),
+	    '#default_value' => variable_get('gsl_search_label', 'Where are you?'),
+	    '#size' => 30,
+	    '#required' => TRUE,
+			'#weight' => -48,
+	  );
+
+	  $form['google_store_locator']['gsl_display_search_marker'] = array(
+	    '#type' => 'checkbox',
+	    '#title' => t('Display "You are Here" marker on the map?'),
+	    '#default_value' => variable_get('gsl_display_search_marker', 0),
+			'#weight' => -47,
+	  );
+
+	  $form['google_store_locator']['gsl_items_per_panel'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('How many stores should show in the panel?'),
+	    '#description' => t('The panel shows the X closest locations where X is the value entered above.'),
+	    '#default_value' => variable_get('gsl_items_per_panel', '10'),
+	    '#size' => 5,
+	    '#element_validate' => array('element_validate_integer_positive'),
+	    '#required' => TRUE,
+			'#weight' => -46,
+	  );
+	  $form['google_store_locator']['gsl_map_lat'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('Default Map center point (Latitude)'),
+	    '#default_value' => variable_get('gsl_map_lat', '40'),
+	    '#size' => 5,
+	    '#element_validate' => array('element_validate_number'),
+	    '#required' => TRUE,
+			'#weight' => -45,
+	  );
+	  $form['google_store_locator']['gsl_map_long'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('Default Map center point (Longitude)'),
+	    '#default_value' => variable_get('gsl_map_long', '-100'),
+	    '#size' => 5,
+	    '#element_validate' => array('element_validate_number'),
+	    '#required' => TRUE,
+			'#weight' => -44,
+	  );
+	  $form['google_store_locator']['gsl_map_zoom'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('Default zoom level'),
+	    '#default_value' => variable_get('gsl_map_zoom', '4'),
+	    '#size' => 5,
+	    '#element_validate' => array('element_validate_integer'),
+	    '#description' => t('Enter a value from 0-21 with 0 being the farthest distance from the earth'),
+	    '#required' => TRUE,
+			'#weight' => -43,
+	  );
+
+	  $form['google_store_locator']['gsl_max_zoom'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('Maximum zoom level'),
+	    '#default_value' => variable_get('gsl_max_zoom', '16'),
+	    '#size' => 5,
+	    '#element_validate' => array('element_validate_integer'),
+	    '#description' => t('Enter a value from 0-21 with 0 being the farthest distance from the earth. This will be the closest a user can zoom in.'),
+	    '#required' => TRUE,
+			'#weight' => -42,
+	  );
+		if (module_exists('file') && !empty($taxTree)) {
+			$i = -41;
+			foreach ($taxTree as $term) {
+				$gsl_type = $term->name;
+				$gsl_type_path = str_replace(' ', '_', strtolower($term->name));
+			  $form['google_store_locator']['gsl_marker_icon_' . $gsl_type_path] = array(
+			  	'#title' => t($gsl_type . ' Marker Icon'),
+			  	'#type' => 'managed_file',
+			  	'#description' => t('The uploaded image will be displayed as the ' . $gsl_type . 'location icon in the map.'),
+			  	'#default_value' => variable_get('gsl_marker_icon_' . $gsl_type_path, ''),
+			  	'#upload_location' => 'public://gsl_marker_location/',
+					'#weight' => $i,
+			  );
+				$i += 1;
+		  }
+		} else {
+	    $form['google_store_locator']['gsl_marker_icon'] = array(
+	      '#markup' => '<h6>' . t('To enable the custom marker icon feature please install the file module') . '</h6>',
+	    );
+		}
+		$i = -50;
+		foreach ($taxTree as $term) {
+			$gsl_type = $term->name;
+			$gsl_type_path = str_replace(' ', '_', strtolower($term->name));
+			$form['google_store_locator']['advanced']['gsl_type_' . $gsl_type_path] = array(
+				'#type' => 'fieldset',
+				'#title' => t($gsl_type),
+				'#collapsible' => TRUE,
+				'#collapsed' => TRUE,
+				'#weight' => $i,
+			);
+			$form['google_store_locator']['advanced']['gsl_type_' . $gsl_type_path]['gsl_json_path_' . $gsl_type_path] = array(
+				'#type' => 'textfield',
+				'#title' => t('Path to ' . $gsl_type . ' Location data'),
+				'#description' => t("Warning: by default this points to the Location Export View which provides the Store data in the proper JSON format. Do not change this path unless you're sure it points to a properly formatted source."),
+				'#default_value' => variable_get('gsl_jason_path_' . $gsl_type_path, 'locator/' . $gsl_type_path . '/json'),
+				'#required' => TRUE,
+				'#weight' => $i,
+			);
+			$form['google_store_locator']['advanced']['gsl_type_' . $gsl_type_path]['gsl_display_path_' . $gsl_type_path] = array(
+				'#type' => 'textfield',
+				'#title' => t('What is the desired path for the ' . $gsl_type . ' locator?'),
+				'#default_value' => variable_get('gsl_display_path_' . $gsl_type_path, 'locator/' . $gsl_type_path),
+				'#description' => t('By default it will be served from /locator/' . $gsl_type_path),
+				'#required' => TRUE,
+				'#weight' => $i + 1,
+			);
+			$i += 2;
+		}
+		$form['#submit'][] = 'gsl_multimap_admin_override_form_submit';
+		
+	}
+}
+
+/**
+ * Build html for locator page.
+ */
+
+function gsl_multimap_page() {
+	
+	$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+	$taxTree = taxonomy_get_tree($vocab->vid);
+	$i = 2;
+  
+  $html =  '  <div class="store-locator-container">';
+  $html .= '      <div class="store-locator-tabs">';
+  $html .= '          <div id="tab1" class="locator-tab tab-x">All Locations</div><!-- tab1 -->';
+	foreach ($taxTree as $term) {
+		//if ($i == 2) {$activeTab = 'tab-x';}else{$activeTab = 'tab-z';}
+		$activeTab = 'tab-z';
+		$html .= '          <div id="tab' . $i . '" class="locator-tab ' . $activeTab . '">' . $term->name . '</div><!-- tab' . $i . ' -->';
+		$i += 1;
+	}
+  $html .= '      </div><!-- /store-locator-tabs -->';
+  $html .= '      <div class="store-locator-content">';
+	$html .= '          <div id="tab1-content" class="tab-content tab-active">' . render(gsl_multimap_default_page('all')) . '</div><!--/tab1-content -->';
+	$i = 2;
+	foreach ($taxTree as $term) {
+		//if ($i == 2) {$activeTab = 'tab-active';}else{$activeTab = '';}
+		$activeTab = '';
+		$name = str_replace(' ', '_', strtolower($term->name));
+		$html .= '          <div id="tab' . $i . '-content"  class="tab-content ' . $activeTab . '">' . render(gsl_multimap_default_page($name)) . '</div><!--/tab' . $i . '-content -->';
+		$i += 1;
+	}
+  $html .= '      </div><!-- /store-locator-content -->';
+  $html .= '  </div><!-- /store-locator-container -->';
+  
+  return $html;
+}
+
+/**
+ * Callback function for /store_locator in hook_menu().
+ */
+
+function gsl_multimap_default_page($args) {
+	if ($args == 'all') {
+		$data_path = variable_get('gsl_json_path', 'store-locator/json');
+	}
+
+  $data_path = variable_get('gsl_json_path_' . $args, 'locator/' . $args . '/json');
+  $map_zoom = variable_get('gsl_map_zoom', '4');
+  $map_cluster= variable_get('gsl_map_cluster', FALSE);
+  $map_cluster_grid= variable_get('gsl_map_cluster_grid', 50);
+  $map_cluster_zoom_limit = variable_get('gsl_cluster_zoom_limit', 10);
+  $viewport_manage = variable_get('gsl_viewport', FALSE);
+  $viewport_marker_limit = variable_get('gsl_marker_zoom_limit', 10);
+  $map_long = variable_get('gsl_map_long', '-100');
+  $map_lat = variable_get('gsl_map_lat', '40');
+  $items_per_panel = variable_get('gsl_items_per_panel', 10);
+  $loc_aware = variable_get('gsl_loc_aware', '0');
+  $search_label = variable_get('gsl_search_label', "Where are you?");
+
+  $variables = array(
+    'data_path' => $data_path,
+    'map_zoom' => $map_zoom,
+    'map_cluster' => $map_cluster,
+    'map_cluster_grid' => $map_cluster_grid,
+    'map_cluster_zoom' => $map_cluster_zoom_limit,
+    'viewport_manage' => $viewport_manage,
+    'viewport_marker_limit' => $viewport_marker_limit,
+    'map_long' => $map_long,
+    'map_lat' => $map_lat,
+    'items_per_panel' => $items_per_panel,
+    'loc_aware' => $loc_aware,
+    'search_label' => $search_label,
+  );
+  
+  
+  $marker_icon_fid = variable_get('gsl_marker_icon_' . $args, '');
+
+  // Add the zoom setting if location awareness is enabled.
+  if ($loc_aware == '1') {
+    $variables['loc_aware_zoom'] = variable_get('gsl_loc_aware_zoom');
+  }
+
+  if (!empty($marker_icon_fid)) {
+    $marker_file = file_load($marker_icon_fid);
+    $variables['marker_path'] = $marker_file->uri;
+  }
+
+  // Add the feature list if some exist.
+  $feature_field = field_info_field('gsl_feature_filter_list');
+  if (isset($feature_field)) {
+    $feature_list = list_allowed_values($feature_field);
+    if (!empty($feature_list)) {
+      // Need to sanitize the keys and labels returned from
+      // list_allowed_values().
+      foreach ($feature_list as $key => $label) {
+        $skey = field_filter_xss($key);
+        $variables['feature_list'][$skey] = field_filter_xss($label);
+      }
+    }
+  }
+  return theme('gsl_multimap_contents', $variables);
+}
+
+/**
+ * Default implementation of the google_store_locator_contents theme hook.
+ *
+ * Builds the renderable array that attaches all necessary js files to the head
+ * section of the page and generates the map and panel elements.
+ */
+function theme_gsl_multimap_contents($variables) {
+  $gsl_map_id = drupal_html_id('google-store-locator-map-container');
+
+  $settings = array(
+    'datapath' => $variables['data_path'],
+    'mapzoom' => intval($variables['map_zoom']),
+    'mapcluster' => intval($variables['map_cluster']),
+    'mapclusterzoom' => intval($variables['map_cluster_zoom']),
+    'mapclustergrid' => intval($variables['map_cluster_grid']),
+    'viewportManage' => $variables['viewport_manage'],
+    'viewportMarkerLimit' => intval($variables['viewport_marker_limit']),
+    'maplong' => $variables['map_long'],
+    'maplat' => $variables['map_lat'],
+    'search_label' => $variables['search_label'],
+    'empty_stores_msg' => isset($variables['empty_stores_msg']) ? $variables['empty_stores_msg'] : t('There are no stores available.'),
+  );
+
+  if (!empty($variables['items_per_panel'])) {
+    $settings['items_per_panel'] = $variables['items_per_panel'];
+  }
+
+  if (!empty($variables['marker_path'])) {
+    $settings['marker_url'] = file_create_url($variables['marker_path']);
+  }
+  if (!empty($variables['feature_list'])) {
+    $settings['feature_list'] = $variables['feature_list'];
+  }
+
+  $output = array(
+    'google_maps_api' => array(
+      '#attached' => array(
+        'js' => array('//maps.googleapis.com/maps/api/js?sensor=false&libraries=places' => array('type' => 'external', 'weight' => -1000)),
+      ),
+    ),
+    'compiled_js' => array(
+      '#attached' => array(
+        'js' => array(libraries_get_path('storelocator') . '/js/store-locator.compiled.js' => array('weight' => -999)),
+      ),
+    ),
+    'build_js' => array(
+      '#attached' => array(
+        'js' => array(drupal_get_path('module', 'google_store_locator') . '/js/google_store_locator.js'),
+      ),
+    ),
+    'store_locator_sheet' => array(
+      '#attached' => array(
+        'css' => array(libraries_get_path('storelocator') . '/css/storelocator.css'),
+      ),
+    ),
+
+    'elements_sheet' => array(
+      '#attached' => array(
+        'css' => array(drupal_get_path('module', 'google_store_locator') . '/theme/google_store_locator.css'),
+      ),
+    ),
+
+    'gsl_map_container' => array(
+      '#type' => 'markup',
+      '#prefix' => '<div id="' . $gsl_map_id . '" class="google-store-locator-map-container">',
+      'gsl_panel' => array(
+        '#markup' => '<div class="google-store-locator-panel"></div>',
+      ),
+      'gsl_map' => array(
+        '#markup' => '<div class="google-store-locator-map"></div>',
+      ),
+      '#suffix' => '</div>',
+      'test_js' => array(
+        '#attached' => array(
+          'js' => array(drupal_get_path('module', 'gsl_multimap') . '/js/gsl_multimap_get_name.js'),
+        ),
+      ),
+    ),
+  );
+
+  $markerclusterer_path = libraries_get_path('markerclusterer');
+  if ($markerclusterer_path) {
+    $output['compiled_js']['#attached']['js'][] = $markerclusterer_path . '/src/markerclusterer_compiled.js';
+  }
+
+  // Add the location awareness js if it's enabled.
+  if (!empty($variables['loc_aware'])) {
+    $output['loc_aware_js'] = array(
+      '#attached' => array(
+        'js' => array(drupal_get_path('module', 'google_store_locator') . '/js/google_store_locator_loc_aware.js'),
+      ),
+    );
+    $settings['loc_aware_zoom'] = (int) $variables['loc_aware_zoom'];
+  }
+
+  drupal_add_js(array(
+    'gsl' => array(
+      $gsl_map_id => $settings,
+      'proximity' => variable_get('proximity_enabled', 0),
+      'metric' => variable_get('proximity_metric', 'mi'),
+      'display_search_marker' => variable_get('gsl_display_search_marker', 0),
+      'max_zoom' => variable_get('gsl_max_zoom', 16)
+    ),
+  ), 'setting');
+
+  return $output;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function gsl_multimap_theme() {
+  // Returns an associative array of theme hook information.
+  //
+  return array(
+  // The outer array keys are the names of the theme functions, and the values
+  // are arrays containing information about the hook.
+    'gsl_multimap_contents' => array(
+     // Keys=names of the variables passed to the themable function,
+     // value=default value of the variable if none is provided.
+      'variables' => array(
+        'data_path' => NULL,
+				'map_zoom' => NULL,
+        'map_cluster' => NULL,
+        'map_cluster_grid' => NULL,
+        'map_cluster_zoom' => NULL,
+        'viewport_manage' => NULL,
+        'viewport_marker_limit' => NULL,
+        'map_long' => NULL,
+        'map_lat' => NULL,
+        'items_per_panel' => NULL,
+        'loc_aware' => NULL,
+        'loc_aware_zoom' => NULL,
+        'search_label' => NULL,
+        'feature_list' => NULL,
+      ),
+    ),
+	);
+}
+
+/**
+ * Submit callback for gsl_multimap_admin_override_form_submit.
+ * This overides the Google Store Locator admin form submit.
+ */
+
+function gsl_multimap_admin_override_form_submit($form, &$form_state) {
+	
+	$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+	$taxTree = taxonomy_get_tree($vocab->vid);
+	foreach ($taxTree as $term) {
+		$name = str_replace(' ', '_', strtolower($term->name));
+	  if ($form['google_store_locator']['gsl_marker_icon_' . $name]['#default_value'] != 0) {
+	    if ($form['google_store_locator']['gsl_marker_icon_' . $name]['#default_value'] != $form_state['values']['gsl_marker_icon_' . $name]) {
+	      $old_file = file_load($form['google_store_locator']['gsl_marker_icon_' . $name]['#default_value']);
+	      file_delete($old_file);
+	    }
+	  }
+	  if ($form_state['values']['gsl_marker_icon_' . $name] != 0) {
+	    // Load the file via file.fid.
+	    $file = file_load($form_state['values']['gsl_marker_icon_' . $name]);
+	    // Change status to permanent.
+	    $file->status = FILE_STATUS_PERMANENT;
+	    // Save.
+	    file_save($file);
+	    file_usage_add($file, 'google_store_locator', 'google_store_locator', $file->fid);
+	  }
+	}
+  menu_rebuild();
+}
+
