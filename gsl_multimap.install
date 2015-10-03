@@ -1,0 +1,87 @@
+<?php
+/**
+ * @file
+ * Install, update and uninstall functions for the Google Store Locator Multimap module.
+ */
+
+/**
+ *
+ * Implements hook_install().
+ *
+ **/
+
+function gsl_multimap_install() {
+
+	gsl_multimap_create_vocab();
+	gsl_multimap_add_field();
+}
+
+/**
+ * Create taxonomy for location types.
+ */
+
+function gsl_multimap_create_vocab() {
+	
+	$new_vocab = (object) array(
+		'name' => 'GSL Location Types',
+		'description' => 'This vocabulary is used to categorize your locations.',
+		'machine_name' => 'gsl_location_types',
+	);
+	
+	taxonomy_vocabulary_save($new_vocab);
+}
+
+/**
+ * Create new term reference field for location type and add instance to "Store Location" type.
+ */
+
+function gsl_multimap_add_field() {
+	
+	$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+
+	$field = array(
+		'field_name' => 'gsl_location_type',
+		'type' => 'taxonomy_term_reference',
+	  'settings' => array(
+		  'allowed_values' => array(
+			  array(
+				  'vocabulary' => $vocab->machine_name,
+				  'parent' => 0,
+			  ),
+		  ),
+	  ),
+	);
+	field_create_field($field);
+		
+	$instance = array(
+		'field_name' => 'gsl_location_type',
+		'entity_type' => 'node',
+		'label' => t('Location Type'),
+		'bundle' => 'store_location',
+		'required' => true,
+		'widget' => array(
+			'type' => 'options_select',
+			'weight' => -1,
+		),
+		'display' => array(
+			'default' => array('type' => 'hidden'),
+			'teaser' => array('type' => 'hidden'),
+		),
+	);
+	field_create_instance($instance);
+}
+
+/**
+ *
+ * Implements hook_uninstall().
+ *
+ **/
+
+function gsl_multimap_uninstall() {
+	
+	$vocab = taxonomy_vocabulary_machine_name_load('gsl_location_types');
+	taxonomy_vocabulary_delete($vocab->vid); // Remove GSL Multimap Locations.
+	variable_del('gsl_type'); // Remove variable for Location Types field on admin page.
+	field_delete_field('gsl_location_type');
+	field_purge_batch(20);
+}
