@@ -1,0 +1,10 @@
+name = Google Store Locator Multimap
+description = Extends the Google Store Locator module to provide separate maps for each type of location.
+core = 7.x
+package = Commerce (contrib)
+dependencies[] = google_store_locator
+files [] = gsl_multimap.module
+files [] = gsl_multimap.install
+scripts[] = js/gsl_multimap.js
+stylesheets[all][] = theme/gsl_multimap.css
+configure = admin/config/search/gsl-multimap
